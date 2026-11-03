@@ -1,115 +1,48 @@
-# NagaEd Software Developer Hurdle Task
+Account Portal
+Developer: Ajanur Rahman
+Contact: ajanurr2@gmail.com
 
-**Developer:** Ajanur Rahman 
-**Contact:** ajanurr2@gmail.com
+A registration and login application built with React, Express, MySQL, and a separate FastAPI service for username suggestions using Groq. The services run together through Docker Compose.
+Run with Docker
+Requirements: Docker Desktop (or Docker Engine with Compose) and a valid Groq API key if you want to use username suggestions.
+cp .env.example .env
+Set GROQ_API_KEY in the root .env file. The example database passwords and JWT secret are for local development only; change them before running the project anywhere shared.
+docker compose up --build -d
+docker compose ps
+- Application: http://127.0.0.1:8080
+- FastAPI docs: http://127.0.0.1:8080/ai/docs
+- Health endpoints: /health and /ai/health
+Only port 8080 is published on the host. Compose starts the MySQL database, backend, AI service, and Nginx frontend. The MySQL volume preserves user records across container restarts. The AI endpoint returns a configuration error if GROQ_API_KEY is not set; registration and login work without it.
 
-Replace these placeholders before submitting.
+To stop the application without deleting user data:
+docker compose down
+API
+Method	Endpoint	Description
+POST	/api/register	Register with username, email, password, address
+POST	/api/login	Sign in using email and password; returns a JWT
+GET	/api/users/:id	Return the authenticated user's profile with a Bearer token
+POST	/ai/api/suggest-username	Generate three usernames from an interests array
 
-## Task 1 — Node.js REST API
 
-This stage implements registration, login, and a JWT-protected user endpoint using Express and MySQL.
+The FastAPI endpoint is /api/suggest-username inside its own service. Nginx exposes it under /ai/api/suggest-username. API failures use JSON error responses; FastAPI also provides interactive docs at /ai/docs.
 
-### Requirements
-
-- Node.js 20 or later
-- MySQL 8 (running locally for Task 1)
-- Thunder Client extension for VS Code (optional, for API testing)
-
-### Local setup
-
-1. In MySQL Workbench, open and execute `backend/sql/init.sql`. Alternatively, use the MySQL CLI:
-   ```sh
-   mysql -u root -p < backend/sql/init.sql
-   ```
-2. Open a terminal in `backend`.
-3. Install packages:
-   ```sh
-   npm install
-   ```
-4. Copy `.env.example` to `.env`. Set your own MySQL password and generate a unique, random `JWT_SECRET` of at least 32 characters. Never commit `.env`.
-
-   On Windows PowerShell:
-   ```powershell
-   Copy-Item .env.example .env
-   # To generate a secure value for JWT_SECRET:
-   $bytes = New-Object byte[] 48
-   [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-   [Convert]::ToBase64String($bytes)
-   ```
-   Copy the generated value into `.env` as `JWT_SECRET`.
-5. Start the API:
-   ```sh
-   npm run dev
-   ```
-
-The API listens on `http://localhost:5000` by default. A successful startup verifies the MySQL connection.
-
-### Endpoints
-
-| Method | Endpoint | Purpose | Success |
-| --- | --- | --- | --- |
-| POST | `/api/register` | Register a new user | 201 |
-| POST | `/api/login` | Authenticate and issue a JWT | 200 |
-| GET | `/api/users/:id` | Read your own user record | 200 |
-
-#### Register
-
-```json
-{
-  "username": "alex_dev",
-  "email": "alex@example.com",
-  "password": "StrongPass123!",
-  "address": "Guwahati, Assam"
-}
-```
-
-#### Login
-
-```json
-{
-  "email": "alex@example.com",
-  "password": "StrongPass123!"
-}
-```
-
-The login response includes a JWT and a `user` object. For the protected route, send:
-
-```text
-Authorization: Bearer <your JWT>
-```
-
-Only the account owner can access `GET /api/users/:id`. Password hashes are never returned. JWTs expire after one hour.
-
-### Response conventions
-
-- `400` invalid or missing fields, or invalid user ID
-- `401` invalid login credentials or missing/invalid/expired JWT
-- `403` valid JWT but attempting to access another user's record
-- `404` user not found or unknown route
-- `409` email already registered
-- `500` unexpected server error (details logged on the server)
-
-Errors use a consistent JSON shape: `{ "error": "message" }`.
-
-### Thunder Client
-
-1. Install **Thunder Client** in VS Code.
-2. Collections → menu → Import → select `thunder-client/thunder-collection_NagaEd Task 1.json`.
-3. Env → Import → select `thunder-client/thunder-environment_NagaEd Local.json` and activate the imported environment.
-4. Send **01 Register — success** first, then **11 Login — success**.
-5. Copy `user.id` and `token` from the login response into the environment's `user_id` and `token` variables.
-6. Run the remaining cases. Each request contains its expected HTTP status code.
-
-The collection contains successful and failure cases for registration, login, and protected routes. Some cases intentionally return 4xx; these are passing outcomes when the expected error is returned.
-
-### Tests
-
-```sh
-npm test
-```
-
-This runs dependency-free validation tests. Use the Thunder Client collection to test the actual HTTP/MySQL/JWT flow.
-
-### Continuing the assignment
-
-Task 2 will add the React frontend, Task 3 will add FastAPI/Groq, and Task 4 will provide Docker Compose. All stages will remain in this project.
+The Node.js service hashes passwords with bcrypt, validates request bodies, and uses parameterized MySQL queries. JWTs expire after one hour. The React app keeps the token in sessionStorage and validates it against the protected endpoint when reloaded.
+Test
+cd backend && npm install && npm test
+cd ../frontend && npm install && npm test && npm run build
+cd ../ai-service && python3 -m pip install -r requirements-dev.txt && python3 -m pytest -q
+These tests cover validation and API behavior using mocked network requests. To verify the complete Docker application, register a user, log in, confirm the dashboard shows their username, try an invalid login, refresh, sign out, and request username suggestions. The Groq test needs a valid API key and internet access.
+Local development (without Docker)
+1. Start MySQL and execute backend/sql/init.sql.
+2. In backend, copy .env.example to .env, set the local MySQL connection and a random JWT_SECRET, then run npm install and npm run dev (port 5050).
+3. In ai-service, copy .env.example to .env, enter your Groq key, install the requirements, then run uvicorn main:app --reload --port 8000.
+4. In frontend, run npm install and npm run dev (port 5173).
+The Vite development server proxies /api to Express and /ai to FastAPI. Docker uses an independent MySQL instance, so users created in a local MySQL server are not copied into the Docker database.
+Project structure
+backend/              Express API, validation, JWT, MySQL queries
+frontend/             React application and Nginx configuration
+ai-service/           FastAPI endpoint and Groq integration
+architecture.png      Service and network diagram
+docker-compose.yml    Container orchestration
+.env.example          Environment variable template
+The project is intended as a small functional assessment application rather than a production authentication system. It does not implement refresh tokens, password reset, or email verification.
